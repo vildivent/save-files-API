@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
-const MB = 10; // 5 MB
+const MB = 15; // 15 MB
 const FILE_SIZE_LIMIT = MB * 1024 * 1024;
 
 const fileSizeLimiter = (req: Request, res: Response, next: NextFunction) => {
@@ -19,7 +19,7 @@ const fileSizeLimiter = (req: Request, res: Response, next: NextFunction) => {
 
   if (filesOverLimit.length) {
     const message =
-      `Ошибка загрузки! Размер файла ${filesOverLimit.toString()} превосходит ${MB} MB`.replace(
+      `Ошибка загрузки! Размер файла ${filesOverLimit.toString()} превышает ${MB} MB`.replace(
         /(,)/g,
         ", "
       );

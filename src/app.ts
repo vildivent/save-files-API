@@ -3,15 +3,22 @@ import cors from "cors";
 import fileUpload from "express-fileupload";
 import path from "path";
 import fs from "fs";
+import { load } from "ts-dotenv";
 import type { Request, Response } from "express";
 import filesPayloadExists from "./middleware/filesPayloadExists";
 import fileExtLimiter from "./middleware/fileExtLimiter";
 import fileSizeLimiter from "./middleware/fileSizeLimiter";
 import { promisify } from "util";
-const sizeOf = promisify(require("image-size"));
+import sizeOf from "image-size";
+const sizeOfAsync = promisify(sizeOf);
 
-const PORT = 3100;
-const projectName = "skyarhyz";
+const env = load({
+  PASSWORD: String,
+  PORT: Number,
+});
+
+const PORT = env.PORT;
+const password = env.PASSWORD;
 const FILES_EXT = [".png", ".jpg", ".jpeg", ".webp"];
 const allowedOrigins = [
   "https://skyarhyz.ru",
@@ -21,7 +28,7 @@ const allowedOrigins = [
 ];
 
 const options: cors.CorsOptions = {
-  origin: allowedOrigins,
+  origin: "*",
   preflightContinue: true,
 };
 
@@ -33,27 +40,49 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.get(`/${projectName}/:id`, (req, res) => {
-  const filepath = path.join(__dirname, "files", projectName, req.params.id);
+app.get(`/:project/:id`, (req, res) => {
+  const filepath = path.join(
+    __dirname,
+    "files",
+    req.params.project,
+    req.params.id
+  );
 
   if (fs.existsSync(filepath)) return res.sendFile(filepath);
 
-  res.status(404).send("Error: file not found");
+  res.status(404).send("Ошибка: файл не найден!");
 });
 
-app.delete(`/${projectName}/:id`, cors(options), (req, res) => {
-  const filepath = path.join(__dirname, "files", projectName, req.params.id);
+app.delete(`/:project/:id`, cors(options), (req, res) => {
+  if (req.query.pass !== password)
+    return res.status(401).send("Доступ запрещён!");
+
+  const filepath = path.join(
+    __dirname,
+    "files",
+    req.params.project,
+    req.params.id
+  );
 
   if (fs.existsSync(filepath)) {
     fs.rmSync(filepath);
     return res.status(200).send("Файл удалён!");
   }
 
-  res.status(404).send("Error: file not found");
+  res.status(404).send("Ошибка: файл не найден!");
 });
 
+type savedFile = {
+  name: string;
+  type: string;
+  width: number;
+  height: number;
+  aspectRatio: number;
+  size: string;
+};
+
 app.post(
-  `/upload/${projectName}`,
+  `/:project`,
   cors(options),
   fileUpload({ createParentPath: true }),
   filesPayloadExists,
@@ -61,8 +90,7 @@ app.post(
   fileSizeLimiter,
   async (req: Request, res: Response) => {
     const files = req.files;
-    const savedFiles: string[] = [];
-    const aspectRatio: number[] = [];
+    const savedFiles: savedFile[] = [];
 
     for (const key of Object.keys(files!)) {
       const file = files![key];
@@ -74,25 +102,42 @@ app.post(
           "_" +
           date.toISOString().match(/[0-9]/g)!.join("") +
           path.extname(file.name).toLowerCase();
-        const filepath = path.join(__dirname, "files", projectName, filename);
+        const filepath = path.join(
+          __dirname,
+          "files",
+          req.params.project,
+          filename
+        );
 
         await file.mv(filepath);
-        savedFiles.push(filename);
 
         try {
-          const dimensions = await sizeOf(filepath);
+          const dimensions = await sizeOfAsync(filepath);
+          if (
+            !dimensions ||
+            !dimensions.width ||
+            !dimensions.height ||
+            !dimensions.type
+          )
+            throw new Error("Can't get dimensions.");
 
-          aspectRatio.push(dimensions.width / dimensions.height);
-          console.log(
-            `File seved with params: {name:${filename}, width:${dimensions.width}, height:${dimensions.height}}`
-          );
+          savedFiles.push({
+            name: filename,
+            type: dimensions.type,
+            height: dimensions.height,
+            width: dimensions.width,
+            aspectRatio: dimensions.width / dimensions.height,
+            size: `${String(file.size / 1024 / 1024)} MB`,
+          });
+
+          console.log(`File ${filename} saved successfully!`);
         } catch (error) {
           console.log(error);
           fs.rmSync(filepath);
           return res.status(400).json({
             status: "error",
             message:
-              "Ошибка загрузки! Файл повреждён, попробуйте изменить его представление цвета на RGB, или попробуйте загрузить другой файл.",
+              "Ошибка загрузки! Не удалось прочитать файл. Возможно, он повреждён - попробуйте загрузить другой файл.",
           });
         }
       }
@@ -100,9 +145,10 @@ app.post(
 
     return res.json({
       status: "success",
-      message: `Сохранены файлы ${savedFiles.toString()}`.replace(/(,)/g, ", "),
-      filenames: savedFiles,
-      aspectRatio,
+      message: `Сохранены файлы ${savedFiles
+        .map((file) => file.name)
+        .toString()}`.replace(/(,)/g, ", "),
+      files: savedFiles,
     });
   }
 );

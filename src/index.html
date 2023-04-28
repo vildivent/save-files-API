@@ -48,8 +48,10 @@
               myFiles.item(key)
             );
           });
+          const url = "http://localhost:3100/test";
+          const url2 = "https://api.skyarhyz.ru/upload/christmas";
 
-          const res = await fetch("http://localhost:3100/upload/skyarhyz", {
+          const res = await fetch(url, {
             method: "POST",
             body: formData,
           });
