@@ -20,12 +20,6 @@ const env = load({
 const PORT = env.PORT;
 const password = env.PASSWORD;
 const FILES_EXT = [".png", ".jpg", ".jpeg", ".webp"];
-const allowedOrigins = [
-  "https://skyarhyz.ru",
-  /\.skyarhyz\.ru/,
-  /\.vercel\.app/,
-  "https://sky-arkhiz.vercel.app",
-];
 
 const options: cors.CorsOptions = {
   origin: "*",
