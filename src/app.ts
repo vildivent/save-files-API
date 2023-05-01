@@ -58,12 +58,12 @@ app.delete(`/:project/:id`, cors(options), (req, res) => {
     req.params.id
   );
 
-  if (fs.existsSync(filepath)) {
-    fs.rmSync(filepath);
+  try {
+    fs.unlinkSync(filepath);
     return res.status(200).send("Файл удалён!");
+  } catch (error) {
+    res.status(404).send("Ошибка: файл не найден!");
   }
-
-  res.status(404).send("Ошибка: файл не найден!");
 });
 
 type savedFile = {
